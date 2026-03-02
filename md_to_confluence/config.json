@@ -1,0 +1,7 @@
+{
+  "confluence": {
+    "username": "***",
+    "password": "***",
+    "base_url": "https://confluence.amlogic.com"
+  }
+}
