@@ -1,0 +1,19 @@
+{
+  "jira": {
+    "username": "yixin.peng",
+    "password": "111"
+  },
+  "gerrit": {
+    "base_url": "https://scgit.amlogic.com",
+    "username": "yixin.peng",
+    "password": "111"
+  },
+  "email": {
+    "smtp_host": "smtp.amlogic.com",
+    "smtp_port": 25,
+    "username": "",
+    "password": "",
+    "from": "yixin.peng@amlogic.com",
+    "to": ["yinan.zhang@amlogic.com"]
+  }
+}
