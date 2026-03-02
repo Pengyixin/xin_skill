@@ -1,0 +1,22 @@
+{
+  "confluence": {
+    "username": "yixin.peng",
+    "password": "***",
+    "base_url": "https://confluence.amlogic.com",
+    "summary_page_url": "https://confluence.amlogic.com/display/~yixin.peng/check+date",
+    "target_page_url": "https://confluence.amlogic.com/display/~yixin.peng/report+result"
+  },
+  "ai": {
+    "openai_api_key": "***",
+    "ai_base_url": "http://10.18.11.68:8099/8d1b5b4c",
+    "ai_model": "DeepSeek-V3-2",
+    "use_ai": true,
+    "max_analyze": 50,
+    "batch_size": 10
+  },
+  "scan": {
+    "default_max_depth": 1,
+    "default_max_threads": 3,
+    "scan_direct_children_only": false
+  }
+}
