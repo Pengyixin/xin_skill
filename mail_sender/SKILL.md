@@ -69,6 +69,8 @@ python mail.py -i "Issue-123" -e "同步失败的详细信息"
 | `--file` | `-f` | HTML 模板文件路径 | 否 |
 | `--to` | `-t` | 收件人邮箱 | 否 |
 | `--config` | `-c` | 配置文件路径 | 否 |
+| `--prepend` | - | 在 HTML 内容前添加的文字 | 否 |
+| `--append` | - | 在 HTML 内容后添加的文字 | 否 |
 | `--version` | - | 显示版本号 | 否 |
 
 #### 使用示例
@@ -93,7 +95,22 @@ python mail.py -i "Issue-789" -e "系统错误" -t admin@example.com
 python mail.py -i "Issue-000" -e "测试" -c /path/to/config.json
 ```
 
-**示例 5：查看帮助**
+**示例 5：在 HTML 内容前添加文字**
+```bash
+python mail.py -i "Issue-111" -f template.html --prepend "这是前置说明"
+```
+
+**示例 6：在 HTML 内容后添加文字**
+```bash
+python mail.py -i "Issue-222" -f template.html --append "这是后置说明"
+```
+
+**示例 7：前后都添加文字**
+```bash
+python mail.py -i "Issue-333" -f template.html --prepend "前置内容" --append "后置内容"
+```
+
+**示例 8：查看帮助**
 ```bash
 python mail.py -h
 ```
@@ -141,7 +158,35 @@ sync_issue_failed(
 )
 ```
 
-#### 3. 直接使用 send_email 函数
+#### 3. 在 HTML 内容前后添加文字
+
+```python
+from mail import sync_issue_failed
+
+# 在 HTML 内容前添加说明
+sync_issue_failed(
+    issue_info="Issue-789",
+    html_file="email_template.html",
+    prepend_text="这是邮件正文前的说明文字"
+)
+
+# 在 HTML 内容后添加说明
+sync_issue_failed(
+    issue_info="Issue-790",
+    html_file="email_template.html",
+    append_text="这是邮件正文后的备注信息"
+)
+
+# 前后都添加文字
+sync_issue_failed(
+    issue_info="Issue-791",
+    html_file="email_template.html",
+    prepend_text="前置说明",
+    append_text="后置备注"
+)
+```
+
+#### 4. 直接使用 send_email 函数
 
 ```python
 from email.mime.text import MIMEText

@@ -23,7 +23,7 @@ def load_config(config_path='config.json'):
 config = load_config()
 EMAIL_CONFIG = config['email']
  
-def sync_issue_failed(issue_info, error_msg="", html_file=None, recipient=None):
+def sync_issue_failed(issue_info, error_msg="", html_file=None, recipient=None, prepend_text=None, append_text=None):
     print(f"Trying to send email for issue: {issue_info}...")
     
     if html_file:
@@ -46,6 +46,14 @@ def sync_issue_failed(issue_info, error_msg="", html_file=None, recipient=None):
     <b>Error Details:</b><br/>
     <pre>{error_msg}</pre>
     """
+    
+    # 在 HTML 内容前添加文字
+    if prepend_text:
+        contents = f"<p>{prepend_text}</p><br/>" + contents
+    
+    # 在 HTML 内容后添加文字
+    if append_text:
+        contents = contents + f"<br/><p>{append_text}</p>"
     message = MIMEText(contents, 'html', 'utf-8')
     sender_name = EMAIL_CONFIG['default_sender_name']
     sender_email = EMAIL_CONFIG['sender_email']
@@ -92,6 +100,15 @@ def main():
   
   # 指定配置文件路径
   python mail.py -i "Issue-000" -e "测试" -c /path/to/config.json
+  
+  # 在 HTML 前添加文字
+  python mail.py -i "Issue-111" -f template.html --prepend "这是前置说明"
+  
+  # 在 HTML 后添加文字
+  python mail.py -i "Issue-222" -f template.html --append "这是后置说明"
+  
+  # 前后都添加文字
+  python mail.py -i "Issue-333" -f template.html --prepend "前置内容" --append "后置内容"
         '''
     )
     
@@ -105,6 +122,10 @@ def main():
                         help='收件人邮箱 (可选，覆盖配置文件中的默认值)')
     parser.add_argument('-c', '--config', default='config.json',
                         help='配置文件路径 (默认: config.json)')
+    parser.add_argument('--prepend', dest='prepend_text',
+                        help='在 HTML 内容前添加的文字')
+    parser.add_argument('--append', dest='append_text',
+                        help='在 HTML 内容后添加的文字')
     parser.add_argument('--version', action='version', version='%(prog)s 1.0')
     
     args = parser.parse_args()
@@ -120,7 +141,9 @@ def main():
         issue_info=args.issue,
         error_msg=args.error,
         html_file=args.html_file,
-        recipient=args.recipient
+        recipient=args.recipient,
+        prepend_text=args.prepend_text,
+        append_text=args.append_text
     )
 
 if __name__ == "__main__":
