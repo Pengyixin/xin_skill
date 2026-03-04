@@ -1,0 +1,10 @@
+{
+  "email": {
+    "sender_email": "yixin.peng@amlogic.com",
+    "sender_password": "xxxxxxx",
+    "smtp_server": "mail-sh.amlogic.com",
+    "smtp_port": 465,
+    "default_recipient": "yixin.peng@amlogic.com, kuan.hu@amlogic.com",
+    "default_sender_name": "yixin.peng"
+  }
+}
