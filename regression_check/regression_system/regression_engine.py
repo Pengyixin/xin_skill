@@ -130,6 +130,9 @@ class RegressionEngine:
         # 缓存已检测的jira，避免重复检测
         self.cache: Dict[str, RegressionResult] = {}
         
+        # 记录当前正在检测中的jira（防止循环检测）
+        self._checking_jiras: set = set()
+        
         print("✅ 回归检测引擎初始化成功")
     
     def _is_regression_branch_matched(self, gerrit_project: str, gerrit_branch: str) -> bool:
@@ -196,6 +199,28 @@ class RegressionEngine:
         if jira_key in self.cache:
             print(f"从缓存中获取结果: {jira_key}")
             return self.cache[jira_key]
+        
+        # 检查是否在检测中（防止循环检测）
+        if jira_key in self._checking_jiras:
+            print(f"⚠️  检测到循环依赖，跳过: {jira_key} 正在检测中")
+            result = RegressionResult(
+                jira_key=jira_key,
+                summary="",
+                status="",
+                owner="",
+                days_since_verified=0,
+                needs_regression=False,
+                regression_status=None,
+                related_gerrits=[],
+                gerrit_merged=False,
+                clone_jiras=[],
+                clone_results=[],
+                error=f"循环依赖检测: {jira_key} 正在被检测"
+            )
+            return result
+        
+        # 标记为正在检测
+        self._checking_jiras.add(jira_key)
         
         try:
             # 步骤1: 获取JIRA issue信息
@@ -293,8 +318,19 @@ class RegressionEngine:
             if issue.clone_jiras:
                 print(f"检查 {len(issue.clone_jiras)} 个clone的jira...")
                 
-                # 首先过滤出SWPL项目的clone jira
-                swpl_clone_jiras = [jira for jira in issue.clone_jiras if jira.startswith("SWPL-")]
+                # 首先过滤出SWPL项目的clone jira，并排除已经在检测中的（防止循环）
+                swpl_clone_jiras = [
+                    jira for jira in issue.clone_jiras 
+                    if jira.startswith("SWPL-") and jira not in self._checking_jiras
+                ]
+                
+                # 记录被跳过的jira（因为正在检测中，说明形成了循环依赖）
+                skipped_jiras = [
+                    jira for jira in issue.clone_jiras 
+                    if jira.startswith("SWPL-") and jira in self._checking_jiras
+                ]
+                if skipped_jiras:
+                    print(f"  ⏭️  跳过正在检测中的jira（避免循环）: {skipped_jiras}")
                 
                 if swpl_clone_jiras:
                     print(f"  只检测SWPL项目的clone jira: {swpl_clone_jiras}")
@@ -370,6 +406,9 @@ class RegressionEngine:
             )
             self.cache[jira_key] = result
             return result
+        finally:
+            # 检测完成，从集合中移除（防止循环检测）
+            self._checking_jiras.discard(jira_key)
     
     def batch_check_jiras(self, jira_keys: List[str]) -> Tuple[List[RegressionResult], RegressionSummary]:
         """

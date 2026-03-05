@@ -322,12 +322,12 @@ class JIRAClient:
                     inward_key = inward.get("key", "")
                     if inward_key and inward_key != issue.key:
                         clone_jiras.append(inward_key)
-                
+                '''
                 if outward:
                     outward_key = outward.get("key", "")
                     if outward_key and outward_key != issue.key:
                         clone_jiras.append(outward_key)
-        
+                '''
         # 方法2: 检查自定义字段
         for key, value in issue.custom_fields.items():
             if key.startswith("customfield_"):
