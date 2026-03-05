@@ -143,6 +143,16 @@ class ConfigManager:
         """获取邮件配置"""
         return self._config_data.get("email", {})
     
+    def get_regression_branches(self) -> list:
+        """
+        获取需要检测的回归分支配置
+        
+        Returns:
+            回归分支配置列表，每个元素包含 project 和 branch
+            示例: [{"project": "platform/hardware/amlogic/media_modules", "branch": "amlogic-main-dev"}]
+        """
+        return self._config_data.get("regression_branches", [])
+    
     def get_all_config(self):
         """获取所有配置"""
         return self._config_data

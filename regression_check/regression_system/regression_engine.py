@@ -118,10 +118,65 @@ class RegressionEngine:
         self.jira_client = JIRAClient(config_manager.get_jira_config())
         self.gerrit_client = GerritClient(config_manager.get_gerrit_config())
         
+        # 加载回归分支配置
+        self.regression_branches = config_manager.get_regression_branches()
+        if self.regression_branches:
+            print(f"📋 已配置回归分支检测:")
+            for i, rb in enumerate(self.regression_branches, 1):
+                print(f"   {i}. Project: {rb.get('project')}, Branch: {rb.get('branch')}")
+        else:
+            print("⚠️  未配置回归分支，将检测所有合并的gerrit")
+        
         # 缓存已检测的jira，避免重复检测
         self.cache: Dict[str, RegressionResult] = {}
         
         print("✅ 回归检测引擎初始化成功")
+    
+    def _is_regression_branch_matched(self, gerrit_project: str, gerrit_branch: str) -> bool:
+        """
+        检查gerrit的分支是否匹配配置的回归分支
+        
+        Args:
+            gerrit_project: gerrit项目名 (如 platform/hardware/amlogic/media_modules)
+            gerrit_branch: gerrit分支名 (如 amlogic-main-dev)
+        
+        Returns:
+            True如果匹配配置的回归分支，False如果不匹配
+        """
+        # 如果没有配置回归分支，允许所有
+        if not self.regression_branches:
+            return True
+        
+        for rb in self.regression_branches:
+            config_project = rb.get('project', '')
+            config_branch = rb.get('branch', '')
+            
+            # 项目匹配检查
+            project_matched = False
+            if config_project == gerrit_project:
+                project_matched = True
+            elif config_project in gerrit_project or gerrit_project in config_project:
+                # 部分匹配（如 media_modules 匹配 platform/hardware/amlogic/media_modules）
+                project_matched = True
+            elif gerrit_project.endswith(config_project.split('/')[-1]):
+                # 简写匹配（如 media_modules 匹配 platform/hardware/amlogic/media_modules）
+                project_matched = True
+            
+            # 分支匹配检查（支持通配符 *）
+            branch_matched = False
+            if '*' in config_branch:
+                import re
+                regex_pattern = config_branch.replace('*', '.*')
+                if re.match(regex_pattern, gerrit_branch):
+                    branch_matched = True
+            else:
+                if config_branch == gerrit_branch:
+                    branch_matched = True
+            
+            if project_matched and branch_matched:
+                return True
+        
+        return False
     
     def check_single_jira(self, jira_key: str) -> RegressionResult:
         """
@@ -182,21 +237,35 @@ class RegressionEngine:
                 self.cache[jira_key] = result
                 return result
             
-            # 步骤3: 检查关联的gerrit是否已合并
+            # 步骤3: 检查关联的gerrit是否已合并到回归分支
             gerrit_merged = False
+            merged_to_regression_branch = False
             if issue.related_gerrits:
                 print(f"检查 {len(issue.related_gerrits)} 个关联gerrit的合并状态...")
-                merged_results = self.gerrit_client.batch_check_merged(issue.related_gerrits)
                 
-                # 只要有一个gerrit已合并，就认为已回归
-                for url, is_merged in merged_results.items():
-                    if is_merged:
+                for url in issue.related_gerrits:
+                    change = self.gerrit_client.get_change_by_url(url)
+                    if not change:
+                        print(f"  ⚠️ 无法获取gerrit信息: {url}")
+                        continue
+                    
+                    if change.is_merged():
                         gerrit_merged = True
                         print(f"  ✅ 找到已合并的gerrit: {url}")
-                        break
+                        print(f"     Project: {change.project}, Branch: {change.branch}")
+                        
+                        # 检查是否合并到配置的回归分支
+                        if self._is_regression_branch_matched(change.project, change.branch):
+                            merged_to_regression_branch = True
+                            print(f"     ✅ 已合并到配置的回归分支")
+                            break
+                        elif self.regression_branches:
+                            print(f"     ⚠️  已合并但未合并到配置的回归分支")
+                    else:
+                        print(f"  ⏳ gerrit未合并: {url} (状态: {change.status})")
             
-            # 如果gerrit已合并，标记为已回归
-            if gerrit_merged:
+            # 如果gerrit已合并到回归分支，标记为已回归
+            if merged_to_regression_branch:
                 result = RegressionResult(
                     jira_key=issue.key,
                     summary=issue.summary,
@@ -213,6 +282,9 @@ class RegressionEngine:
                 )
                 self.cache[jira_key] = result
                 return result
+            elif gerrit_merged and self.regression_branches:
+                # gerrit已合并但未合并到配置的回归分支
+                print(f"  ⚠️  gerrit已合并但未合并到配置的回归分支")
             
             # 步骤4: 如果没有gerrit或gerrit未合并，检查clone的jira
             clone_results = []
