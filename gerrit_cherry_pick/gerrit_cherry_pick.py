@@ -153,8 +153,8 @@ def make_api_request(url: str, username: str, password: str, base_url: str,
 def get_change_details(base_url: str, change_id: str, username: str,
                        password: str) -> Tuple[bool, Dict]:
     """获取变更详情"""
-    # 注意: DETAILED_ACCOUNTS 选项会导致400错误，所以不使用它
-    url = f"{base_url}/a/changes/?q={change_id}&o=CURRENT_REVISION"
+    # 使用CURRENT_COMMIT获取完整commit message
+    url = f"{base_url}/a/changes/?q={change_id}&o=CURRENT_REVISION&o=CURRENT_COMMIT"
     success, result = make_api_request(url, username, password, base_url)
 
     if not success:
@@ -206,17 +206,24 @@ def cherry_pick_change(base_url: str, change_id: str, target_branch: str,
 
 
 def generate_html_report_batch(
+    base_url: str,
     target_branch: str,
     results: List[Dict],
     success_count: int,
     failed_count: int,
-    output_file: str = "cherry_pick_report.html"
+    output_file: Optional[str] = None
 ) -> str:
     """生成批量cherry-pick的HTML报告"""
     from datetime import datetime
+    import urllib.parse
     
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     total_count = len(results)
+    if output_file is None:
+        output_file = f"cherry_pick_report_{timestamp}.html"
+    
+    # 构建简洁汇总表格HTML
+    summary_table_rows = []
     
     # 构建变更列表HTML
     changes_html = ""
@@ -224,48 +231,104 @@ def generate_html_report_batch(
         details = result.get('details', {})
         success = result.get('success', False)
         
+        # 获取原始 Change Number 和构建原始 Gerrit URL
+        original_change_number = details.get('_number', result.get('change_id', '')) if details else result.get('change_id', '')
+        original_gerrit_url = f"{base_url}/#/c/{original_change_number}/" if original_change_number else ""
+        
+        # 获取 commit message 第一行（从完整message中获取）
+        current_revision = details.get('current_revision', '')
+        revisions = details.get('revisions', {})
+        if current_revision and current_revision in revisions:
+            full_message = revisions[current_revision].get('commit', {}).get('message', '')
+        else:
+            full_message = details.get('subject', 'N/A') if details else '获取失败'
+        
+        commit_message_first_line = full_message.split('\n')[0].strip() if full_message else 'N/A'
+        # 截断过长的commit信息
+        if len(commit_message_first_line) > 80:
+            commit_message_first_line = commit_message_first_line[:80] + "..."
+        
         if success:
             cherry_pick_result = result.get('cherry_pick_result', {})
             new_change_id = ""
+            new_change_number = ""
             if isinstance(cherry_pick_result, dict):
                 new_change_id = cherry_pick_result.get('id', 'N/A')
+                new_change_number = cherry_pick_result.get('_number', '')
             elif isinstance(cherry_pick_result, list) and len(cherry_pick_result) > 0:
                 new_change_id = cherry_pick_result[0].get('id', 'N/A')
+                new_change_number = cherry_pick_result[0].get('_number', '')
             
-            # 获取原始Change-Id
+            # 构建新的 Gerrit URL
+            new_gerrit_url = f"{base_url}/#/c/{new_change_number}/" if new_change_number else ""
+            
+            # 获取原始 Change-Id
             original_change_id = details.get('change_id', 'N/A') if details else 'N/A'
             
             status_html = f'<span class="status-success">成功</span>'
+            status_text = '成功'
             result_html = f'''
             <div class="success-details">
+                <p><strong>Commit Message:</strong> <span class="commit-message">{commit_message_first_line}</span></p>
                 <p><strong>原始Change-Id:</strong> <code>{original_change_id}</code></p>
+                <p><strong>原始Gerrit链接:</strong> <a href="{original_gerrit_url}" target="_blank" class="gerrit-link">{original_gerrit_url}</a></p>
                 <p><strong>新Change ID:</strong> {new_change_id}</p>
+                <p><strong>新Gerrit链接:</strong> <a href="{new_gerrit_url}" target="_blank" class="gerrit-link">{new_gerrit_url}</a></p>
                 <p class="note" style="font-size: 12px; color: #666; margin-top: 8px;">
-                    注：Gerrit cherry-pick会创建新change（新Change Number），但会在commit message中引用原始Change-Id
+                    点击链接可直接访问Gerrit页面
                 </p>
             </div>
             '''
+            
+            # 添加到汇总表格行
+            new_gerrit_link = f'<a href="{new_gerrit_url}" target="_blank" class="gerrit-link">{new_gerrit_url}</a>' if new_gerrit_url else 'N/A'
         else:
             error_msg = result.get('error', '未知错误')
             status_html = f'<span class="status-failed">失败</span>'
-            result_html = f'<div class="error-details"><strong>错误:</strong> {error_msg}</div>'
+            status_text = '失败'
+            result_html = f'''
+            <div class="error-details">
+                <p><strong>Commit Message:</strong> <span class="commit-message">{commit_message_first_line}</span></p>
+                <p><strong>原始Gerrit链接:</strong> <a href="{original_gerrit_url}" target="_blank" class="gerrit-link">{original_gerrit_url}</a></p>
+                <p><strong>错误:</strong> {error_msg}</p>
+            </div>
+            '''
+            
+            # 添加到汇总表格行（失败时没有新链接）
+            new_gerrit_link = '<span style="color: #999;">-</span>'
+        
+        # 构建汇总表格行
+        original_gerrit_link = f'<a href="{original_gerrit_url}" target="_blank" class="gerrit-link">{original_gerrit_url}</a>' if original_gerrit_url else 'N/A'
+        status_class = 'status-cell-success' if success else 'status-cell-failed'
+        summary_table_rows.append(f'''
+        <tr>
+            <td class="commit-cell" title="{commit_message_first_line}">{commit_message_first_line}</td>
+            <td class="link-cell">{new_gerrit_link}</td>
+            <td class="link-cell">{original_gerrit_link}</td>
+            <td class="status-cell {status_class}">{status_text}</td>
+        </tr>
+        ''')
         
         changes_html += f"""
         <div class="change-item">
             <div class="change-header">
                 <span class="change-number">#{idx}</span>
-                <span class="change-subject">{details.get('subject', 'N/A') if details else '获取失败'}</span>
+                <span class="change-subject">{commit_message_first_line}</span>
                 {status_html}
             </div>
             <table class="change-table">
-                <tr><th>源URL</th><td>{result.get('url', 'N/A')}</td></tr>
-                <tr><th>Change Number</th><td>{details.get('_number', result.get('change_id', 'N/A')) if details else result.get('change_id', 'N/A')}</td></tr>
+                <tr><th>源URL/ID</th><td>{result.get('url', 'N/A')}</td></tr>
+                <tr><th>Change Number</th><td>{original_change_number}</td></tr>
                 <tr><th>原分支</th><td>{details.get('branch', 'N/A') if details else 'N/A'}</td></tr>
+                <tr><th>目标分支</th><td>{target_branch}</td></tr>
                 <tr><th>项目</th><td>{details.get('project', 'N/A') if details else 'N/A'}</td></tr>
             </table>
             {result_html}
         </div>
         """
+    
+    # 构建汇总表格HTML
+    summary_table_html = "".join(summary_table_rows)
     
     html_content = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -407,11 +470,82 @@ def generate_html_report_batch(
             border-radius: 5px;
             margin-top: 10px;
         }}
+        .gerrit-link {{
+            color: #0066cc;
+            text-decoration: none;
+            word-break: break-all;
+        }}
+        .gerrit-link:hover {{
+            text-decoration: underline;
+        }}
+        .commit-message {{
+            font-weight: bold;
+            color: #333;
+            background: rgba(255,255,255,0.5);
+            padding: 2px 6px;
+            border-radius: 3px;
+        }}
         .footer {{
             text-align: center;
             color: #666;
             margin-top: 30px;
             padding: 20px;
+        }}
+        .summary-table-wrapper {{
+            background: white;
+            padding: 25px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            overflow-x: auto;
+        }}
+        .summary-table-wrapper h2 {{
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }}
+        .summary-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }}
+        .summary-table th {{
+            background: #f8f9fa;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 2px solid #dee2e6;
+            white-space: nowrap;
+        }}
+        .summary-table td {{
+            padding: 12px;
+            border-bottom: 1px solid #dee2e6;
+            vertical-align: middle;
+        }}
+        .summary-table tr:hover {{
+            background: #f8f9fa;
+        }}
+        .commit-cell {{
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }}
+        .link-cell {{
+            white-space: nowrap;
+        }}
+        .status-cell {{
+            font-weight: 600;
+            text-align: center;
+        }}
+        .status-cell-success {{
+            color: #28a745;
+        }}
+        .status-cell-failed {{
+            color: #dc3545;
         }}
     </style>
 </head>
@@ -438,6 +572,23 @@ def generate_html_report_batch(
                 <div>失败</div>
             </div>
         </div>
+    </div>
+
+    <div class="summary-table-wrapper">
+        <h2>快速汇总表</h2>
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th style="width: 40%;">Commit 信息</th>
+            <th style="width: 20%;">Cherry-Pick 后 Gerrit</th>
+                    <th style="width: 20%;">原始 Gerrit</th>
+                    <th style="width: 10%;">状态</th>
+                </tr>
+            </thead>
+            <tbody>
+                {summary_table_html}
+            </tbody>
+        </table>
     </div>
 
     <div class="changes-list">
@@ -648,6 +799,7 @@ def main():
     print("\n" + "=" * 60)
     print("生成汇总HTML报告...")
     report_file = generate_html_report_batch(
+        base_url,
         target_branch,
         all_results,
         total_success,
