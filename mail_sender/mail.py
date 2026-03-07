@@ -59,7 +59,7 @@ def sync_issue_failed(issue_info, error_msg="", html_file=None, recipient=None, 
     sender_email = EMAIL_CONFIG['sender_email']
     message["From"] = str(Header(f"{sender_name}<{sender_email}>", 'utf-8'))
     message["To"] = recipient if recipient else EMAIL_CONFIG['default_recipient']
-    message["Subject"] = f"Ecode issue sync to jira failed - {issue_info}"
+    message["Subject"] = f"{issue_info}"
    
     send_email(message, sender_email, EMAIL_CONFIG['sender_password'], EMAIL_CONFIG['smtp_server'])
  
