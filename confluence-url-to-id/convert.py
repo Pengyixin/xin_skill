@@ -15,12 +15,12 @@ from typing import Optional, List, Tuple
 import requests
 from requests.auth import HTTPBasicAuth
 
-# 尝试加载 .env 文件
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+# 不再使用 .env 文件，只从环境变量读取配置
+# 支持的环境变量：
+#   CONFLUENCE_URL - Confluence 服务器地址
+#   CONFLUENCE_USERNAME - 用户名
+#   CONFLUENCE_PASSWORD - 密码（或 CONFLUENCE_API_TOKEN）
+#   CONFLUENCE_API_TOKEN - API Token（优先于密码）
 
 
 class ConfluenceURLConverter:
@@ -29,9 +29,29 @@ class ConfluenceURLConverter:
     def __init__(self, base_url: str, username: str, auth_type: str, auth_value: str):
         self.base_url = base_url.rstrip('/')
         self.username = username
-        self.auth_type = auth_type  # 'token' or 'password'
+        self.auth_type = auth_type  # 'token', 'password', 或 'pat'
         self.auth_value = auth_value
-        self.auth = HTTPBasicAuth(username, auth_value)
+        
+        # 检查是否是 PAT (Personal Access Token)
+        # PAT 通常是以 base64 编码的长字符串，用于 Bearer 认证
+        if auth_type == 'token' and self._is_pat_token(auth_value):
+            self.auth_type = 'pat'
+            self.auth = None  # PAT 不需要 auth 对象
+        else:
+            self.auth = HTTPBasicAuth(username, auth_value)
+    
+    def _is_pat_token(self, token: str) -> bool:
+        """检查 token 是否是 Personal Access Token"""
+        # PAT 通常是较长的 base64 字符串（通常 40+ 字符）
+        # 而 Atlassian API Token 通常较短
+        return len(token) > 40 and token.replace('-', '').replace('_', '').isalnum()
+    
+    def _get_headers(self) -> dict:
+        """获取请求头"""
+        headers = {'Accept': 'application/json'}
+        if self.auth_type == 'pat':
+            headers['Authorization'] = f'Bearer {self.auth_value}'
+        return headers
     
     def parse_url(self, url: str) -> Tuple[Optional[str], Optional[str]]:
         """
@@ -78,13 +98,16 @@ class ConfluenceURLConverter:
                 'expand': 'id,space'
             }
             
-            response = requests.get(
-                url, 
-                auth=self.auth, 
-                params=params,
-                headers={'Accept': 'application/json'},
-                timeout=30
-            )
+            # 根据认证类型构建请求参数
+            request_kwargs = {
+                'params': params,
+                'headers': self._get_headers(),
+                'timeout': 30
+            }
+            if self.auth_type != 'pat':
+                request_kwargs['auth'] = self.auth
+            
+            response = requests.get(url, **request_kwargs)
             
             if response.status_code == 200:
                 data = response.json()
@@ -163,19 +186,22 @@ def interactive_config():
     print("🔧 Amlogic Confluence URL 转换器 - 配置向导")
     print("="*60)
     
-    # 检查当前配置
-    current_username = os.getenv('ATLASSIAN_USERNAME', '')
-    current_url = os.getenv('ATLASSIAN_URL', 'https://confluence.amlogic.com')
-    current_auth_type = os.getenv('ATLASSIAN_AUTH_TYPE', 'token')
+    # 检查当前配置（支持新的环境变量名）
+    current_username = os.getenv('CONFLUENCE_USERNAME') or os.getenv('ATLASSIAN_USERNAME', '')
+    current_url = os.getenv('CONFLUENCE_URL') or os.getenv('ATLASSIAN_URL', 'https://confluence.amlogic.com')
+    current_token = os.getenv('CONFLUENCE_API_TOKEN') or os.getenv('ATLASSIAN_API_TOKEN', '')
+    current_password = os.getenv('CONFLUENCE_PASSWORD') or os.getenv('ATLASSIAN_PASSWORD', '')
+    current_auth_type = 'token' if current_token else ('password' if current_password else '')
     
     print(f"\n当前配置:")
     print(f"  URL: {current_url}")
     print(f"  用户名: {current_username or '(未设置)'}")
-    print(f"  认证方式: {current_auth_type}")
-    if current_auth_type == 'token':
-        print(f"  API Token: {'(已设置)' if os.getenv('ATLASSIAN_API_TOKEN') else '(未设置)'}")
+    if current_token:
+        print(f"  认证方式: API Token (已设置)")
+    elif current_password:
+        print(f"  认证方式: 密码 (已设置)")
     else:
-        print(f"  密码: {'(已设置)' if os.getenv('ATLASSIAN_PASSWORD') else '(未设置)'}")
+        print(f"  认证方式: (未设置)")
     
     print("\n请输入新的配置值（直接回车保持当前值）:")
     
@@ -187,39 +213,34 @@ def interactive_config():
     
     if auth_type == 'token':
         token = input("API Token (输入隐藏): ").strip()
-        if not token and os.getenv('ATLASSIAN_API_TOKEN'):
+        if not token and current_token:
             keep_current = input("保持当前 API Token? (y/n) [y]: ").strip().lower() or 'y'
             if keep_current == 'y':
-                token = os.getenv('ATLASSIAN_API_TOKEN')
+                token = current_token
         
-        # 保存到 .env 文件
-        env_content = f"""# Amlogic Confluence API 配置
-ATLASSIAN_USERNAME={username}
-ATLASSIAN_AUTH_TYPE=token
-ATLASSIAN_API_TOKEN={token}
-ATLASSIAN_URL={url}
-"""
+        # 只显示环境变量导出命令，不保存到文件
+        print("\n" + "="*60)
+        print("✅ 配置完成! 请设置以下环境变量:")
+        print("="*60)
+        print(f"export CONFLUENCE_URL=\"{url}\"")
+        print(f"export CONFLUENCE_USERNAME=\"{username}\"")
+        print(f"export CONFLUENCE_API_TOKEN=\"{token}\"")
+        print("="*60)
     else:
         password = input("密码 (输入隐藏): ").strip()
-        if not password and os.getenv('ATLASSIAN_PASSWORD'):
+        if not password and current_password:
             keep_current = input("保持当前密码? (y/n) [y]: ").strip().lower() or 'y'
             if keep_current == 'y':
-                password = os.getenv('ATLASSIAN_PASSWORD')
+                password = current_password
         
-        # 保存到 .env 文件
-        env_content = f"""# Amlogic Confluence API 配置
-ATLASSIAN_USERNAME={username}
-ATLASSIAN_AUTH_TYPE=password
-ATLASSIAN_PASSWORD={password}
-ATLASSIAN_URL={url}
-"""
-    
-    env_path = os.path.join(os.path.dirname(__file__), '.env')
-    with open(env_path, 'w') as f:
-        f.write(env_content)
-    
-    print(f"\n✅ 配置已保存到: {env_path}")
-    print("⚠️  注意: .env 文件包含敏感信息，请勿提交到版本控制!")
+        # 只显示环境变量导出命令，不保存到文件
+        print("\n" + "="*60)
+        print("✅ 配置完成! 请设置以下环境变量:")
+        print("="*60)
+        print(f"export CONFLUENCE_URL=\"{url}\"")
+        print(f"export CONFLUENCE_USERNAME=\"{username}\"")
+        print(f"export CONFLUENCE_PASSWORD=\"{password}\"")
+        print("="*60)
 
 
 def main():
@@ -258,18 +279,30 @@ def main():
         interactive_config()
         return
     
-    # 获取配置
-    base_url = os.getenv('ATLASSIAN_URL', 'https://confluence.amlogic.com')
-    username = os.getenv('ATLASSIAN_USERNAME')
-    auth_type = os.getenv('ATLASSIAN_AUTH_TYPE', 'token')
-    auth_value = os.getenv('ATLASSIAN_API_TOKEN') if auth_type == 'token' else os.getenv('ATLASSIAN_PASSWORD')
+    # 获取配置（支持新的环境变量名）
+    base_url = os.getenv('CONFLUENCE_URL') or os.getenv('ATLASSIAN_URL', 'https://confluence.amlogic.com')
+    username = os.getenv('CONFLUENCE_USERNAME') or os.getenv('ATLASSIAN_USERNAME')
+    
+    # 优先使用 API Token，如果没有则使用密码
+    api_token = os.getenv('CONFLUENCE_API_TOKEN') or os.getenv('ATLASSIAN_API_TOKEN')
+    password = os.getenv('CONFLUENCE_PASSWORD') or os.getenv('ATLASSIAN_PASSWORD')
+    
+    auth_type = 'token'
+    auth_value = api_token
+    if not auth_value and password:
+        auth_type = 'password'
+        auth_value = password
     
     if not username or not auth_value:
         print("❌ 错误: 未配置认证信息")
-        print("\n请使用以下方式之一配置:")
-        print("1. 运行: ./convert.py config")
-        print("2. 设置环境变量: ATLASSIAN_USERNAME, ATLASSIAN_API_TOKEN 或 ATLASSIAN_PASSWORD")
-        print("3. 创建 .env 文件（参考 .env.example）")
+        print("\n请设置以下环境变量:")
+        print("  export CONFLUENCE_URL=\"https://confluence.amlogic.com\"")
+        print("  export CONFLUENCE_USERNAME=\"your-email@amlogic.com\"")
+        print("  export CONFLUENCE_API_TOKEN=\"your-api-token\"")
+        print("  # 或者使用密码:")
+        print("  export CONFLUENCE_PASSWORD=\"your-password\"")
+        print("\n或使用旧的环境变量名:")
+        print("  ATLASSIAN_URL, ATLASSIAN_USERNAME, ATLASSIAN_API_TOKEN/ATLASSIAN_PASSWORD")
         sys.exit(1)
     
     # 创建转换器
@@ -291,7 +324,9 @@ def main():
     print(f"🔄 开始转换 {len(urls_to_convert)} 个 URL...")
     print(f"Confluence: {base_url}")
     print(f"用户: {username}")
-    print(f"认证方式: {auth_type}")
+    # 显示实际的认证类型（可能是 pat/token/password）
+    display_auth_type = converter.auth_type
+    print(f"认证方式: {display_auth_type}")
     print()
     
     success_count = 0
