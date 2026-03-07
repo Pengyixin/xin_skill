@@ -1,6 +1,6 @@
 ---
 name: jira-info-extractor
-description: JIRA信息提取器是一个独立的Python工具，专门用于从JIRA系统中提取issue的详细信息，包括自定义字段RootCause(customfield_11708)和HowToFix(customfield_11709)。该工具支持文本和JSON格式输出，无任何文字截断。
+description: JIRA信息提取器是一个独立的Python工具，专门用于从JIRA系统中提取issue的详细信息，包括自定义字段RootCause(customfield_11708)和HowToFix(customfield_11709)。该工具支持文本和JSON格式输出，无任何文字截断。使用环境变量 `JIRA_USERNAME` 和 `JIRA_PASSWORD` 配置认证信息。
 ---
 
 # JIRA信息提取器使用说明手册
@@ -13,7 +13,7 @@ description: JIRA信息提取器是一个独立的Python工具，专门用于从
 - **完整信息输出**：所有文字不截断，保证后期分析准确性
 - **Assignee评论分析**：提取并显示所有Assignee评论（不限于最新一条）
 - **多格式输出**：支持文本摘要和完整JSON格式输出
-- **配置文件管理**：通过配置文件管理JIRA认证信息
+- **环境变量配置**：通过环境变量管理JIRA认证信息
 
 ### 1.2 技术架构
 - **语言**：Python 3（兼容Python 2语法）
@@ -21,6 +21,7 @@ description: JIRA信息提取器是一个独立的Python工具，专门用于从
   - `JIRAClient`：JIRA API客户端
   - `extract_issue_info`：信息提取函数
   - `print_jira_info`：格式化输出函数
+  - `load_config`：配置加载函数（支持多种配置方式）
 - **外部依赖**：
   - `requests`：HTTP请求库
   - `argparse`：命令行参数解析
@@ -28,7 +29,7 @@ description: JIRA信息提取器是一个独立的Python工具，专门用于从
 ### 1.3 系统要求
 - Python 2.7+ 或 Python 3.6+
 - 网络访问权限（可访问企业内部JIRA系统）
-- 有效的JIRA认证凭据
+- 有效的JIRA认证凭据（通过环境变量 `JIRA_USERNAME` 和 `JIRA_PASSWORD` 配置）
 
 ## 2. 快速入门
 
@@ -37,31 +38,40 @@ description: JIRA信息提取器是一个独立的Python工具，专门用于从
 pip install requests
 ```
 
-### 2.2 配置文件设置
-1. 创建或修改 `config.json` 文件：
-```json
-{
-  "jira": {
-    "username": "your_username",
-    "password": "your_password"
-  }
-}
+### 2.2 配置JIRA认证
+
+通过环境变量配置JIRA认证信息：
+
+```bash
+# Windows CMD
+set JIRA_USERNAME=your_username
+set JIRA_PASSWORD=your_password
+
+# Windows PowerShell
+$env:JIRA_USERNAME="your_username"
+$env:JIRA_PASSWORD="your_password"
+
+# Linux/macOS
+export JIRA_USERNAME="your_username"
+export JIRA_PASSWORD="your_password"
 ```
 
-2. 配置说明：
-   - `jira.username`：JIRA用户名
-   - `jira.password`：JIRA密码
+**说明**：
+- `JIRA_USERNAME`：JIRA用户名
+- `JIRA_PASSWORD`：JIRA密码或API Token
 
 ### 2.3 基本用法
+
 ```bash
-# 使用issue key（Python 3）
+# 确保环境变量已设置
+export JIRA_USERNAME="your_username"
+export JIRA_PASSWORD="your_password"
+
+# 使用issue key
 py jira_info_extractor.py "SWPL-252994"
 
 # 使用JIRA URL
 py jira_info_extractor.py "https://jira.amlogic.com/browse/SWPL-252994"
-
-# 指定配置文件
-py jira_info_extractor.py "SWPL-252994" --config config.json
 
 # JSON格式输出
 py jira_info_extractor.py "SWPL-252994" --format json
@@ -70,13 +80,17 @@ py jira_info_extractor.py "SWPL-252994" --format json
 py jira_info_extractor.py "SWPL-252994" --output result.txt
 ```
 
+### 2.4 帮助信息
+```bash
+py jira_info_extractor.py --help
+```
+
 ## 3. 使用方式
 
 ### 3.1 命令行参数
 
 ```
-usage: jira_info_extractor.py [-h] [--config CONFIG] [--format {text,json}]
-                              [--output OUTPUT]
+usage: jira_info_extractor.py [-h] [--format {text,json}] [--output OUTPUT]
                               jira_input
 
 从JIRA号提取相关信息
@@ -86,8 +100,6 @@ positional arguments:
 
 options:
   -h, --help            显示帮助信息
-  --config CONFIG, -c CONFIG
-                        配置文件路径 (默认: ./config.json 或环境变量 COMMIT_CONFIG_PATH)
   --format {text,json}, -f {text,json}
                         输出格式: text (文本摘要) 或 json (完整JSON数据)
   --output OUTPUT, -o OUTPUT
@@ -95,7 +107,8 @@ options:
 ```
 
 ### 3.2 环境变量
-- `COMMIT_CONFIG_PATH`：指定默认配置文件路径
+- `JIRA_USERNAME`：JIRA用户名
+- `JIRA_PASSWORD`：JIRA密码或API Token
 
 ### 3.3 输出说明
 
@@ -220,17 +233,25 @@ JSON格式包含完整数据结构：
 
 #### 常见错误及解决方案：
 
-1. **配置文件不存在**
+1. **缺少认证信息（环境变量未设置）**
    ```
-   错误: 配置文件不存在: ./config.json
+   错误: 需要提供JIRA用户名和密码
+   提供方式（按优先级排序）：
+     1. 命令行参数: --username, --password
+     2. 环境变量: JIRA_USERNAME, JIRA_PASSWORD
+     3. 配置文件: --config <配置文件路径>
    ```
-   **解决方案**：创建配置文件或使用 `--config` 参数指定
+   **解决方案**：设置环境变量
+   ```bash
+   export JIRA_USERNAME="your_username"
+   export JIRA_PASSWORD="your_password"
+   ```
 
 2. **JIRA认证失败**
    ```
    错误: 获取JIRA issue失败: 401 Client Error
    ```
-   **解决方案**：检查 `config.json` 中的JIRA用户名和密码
+   **解决方案**：检查环境变量中的用户名和密码是否正确
 
 3. **Python版本问题**
    ```
@@ -271,10 +292,10 @@ JSON格式包含完整数据结构：
 
 ### 3.7 最佳实践
 
-1. **配置管理**
-   - 将配置文件放在安全位置
-   - 使用环境变量管理敏感信息
-   - 定期更新认证信息
+1. **环境变量配置**
+   - 在系统启动脚本中设置 `JIRA_USERNAME` 和 `JIRA_PASSWORD`
+   - 避免在共享环境中暴露密码
+   - 定期轮换密码或API Token
 
 2. **Python版本**
    - 推荐使用`py`命令（Python 3）
@@ -286,7 +307,7 @@ JSON格式包含完整数据结构：
 
 4. **集成使用**
    ```bash
-   # 与其他工具结合使用
+   # 与其他工具结合使用（环境变量已预设）
    python jira_info_extractor.py "SWPL-252994" --format json | jq '.root_cause'
    
    # 保存到文件后处理
@@ -298,10 +319,11 @@ JSON格式包含完整数据结构：
 
 | 问题 | 可能原因 | 解决方案 |
 |------|----------|----------|
+| 缺少认证信息 | 环境变量未设置 | 设置 `export JIRA_USERNAME=xxx` 和 `export JIRA_PASSWORD=xxx` |
+| JIRA认证失败 | 用户名或密码错误 | 检查环境变量中的认证信息，确认密码未过期 |
 | 无法解析JIRA URL | URL格式不正确 | 使用完整的JIRA issue URL或直接使用issue key |
 | 输出乱码 | 终端编码问题 | 脚本已包含编码处理，确保终端支持UTF-8 |
 | 运行速度慢 | 网络延迟或JIRA响应慢 | 检查网络连接，考虑本地缓存 |
-| 认证频繁失败 | 密码过期或权限变更 | 更新配置文件中的认证信息 |
 | 部分字段缺失 | JIRA字段名变更 | 检查JIRA系统的自定义字段名 |
 
 ## 5. AI 助手使用方法
@@ -309,11 +331,12 @@ JSON格式包含完整数据结构：
 ### 5.1 工作流程
 当用户要求生成 commit message 或需要 JIRA 信息时，AI 助手应该按照以下流程操作：
 
-1. **自动提取 JIRA 信息**：
+1. **自动提取 JIRA 信息**（环境变量已预设）：
    ```bash
    cd /home/peng/.opencode/skill/JIRA_Info_Extractor
    python3 jira_info_extractor.py "TV-XXXXXX"
    ```
+   > **注意**：环境变量 `JIRA_USERNAME` 和 `JIRA_PASSWORD` 已预先配置，**无需询问用户**，直接执行命令即可
 
 2. **解析提取的信息**：
    - 从输出中提取：key, summary, priority, components, root_cause, how_to_fix, assignee_comments
@@ -331,7 +354,8 @@ JSON格式包含完整数据结构：
 用户请求："请帮我将jira TV-174693生成一份commit message信息"
 
 **AI 助手执行步骤**：
-1. 运行 `python3 jira_info_extractor.py "TV-174693"`
+1. 直接运行 `python3 jira_info_extractor.py "TV-174693"`
+   > 环境变量已预设，无需询问认证信息
 2. 解析输出，获取必要字段
 3. 加载 `commit-message-rule` 技能
 4. 根据规则生成标准 commit message
@@ -340,7 +364,8 @@ JSON格式包含完整数据结构：
 用户请求："查询 TV-174693 的详细信息"
 
 **AI 助手执行步骤**：
-1. 运行 `python3 jira_info_extractor.py "TV-174693" --format json`
+1. 直接运行 `python3 jira_info_extractor.py "TV-174693" --format json`
+   > 环境变量已预设，无需询问认证信息
 2. 解析 JSON 输出
 3. 以结构化方式展示关键信息
 
@@ -358,16 +383,16 @@ JSON格式包含完整数据结构：
 
 ### 5.4 错误处理
 如果脚本执行失败：
-1. 检查配置文件是否存在且格式正确
-2. 验证 JIRA 网络连接
+1. 检查环境变量 `JIRA_USERNAME` 和 `JIRA_PASSWORD` 是否已正确设置
+2. 检查 JIRA 网络连接
 3. 确认 JIRA ID 格式正确
-4. 如仍失败，提示用户提供必要信息
+4. 如仍失败，联系管理员检查环境变量配置
 
 ## 6. 支持与反馈
 
 如遇问题或需要功能改进，请：
 1. 检查日志输出中的错误信息
-2. 验证配置文件的正确性
+2. 验证环境变量 `JIRA_USERNAME` 和 `JIRA_PASSWORD` 是否正确设置
 3. 确保网络连接和系统权限
 4. 使用`--format json`查看完整数据结构
 5. 联系工具维护者获取支持

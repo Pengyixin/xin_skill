@@ -162,21 +162,56 @@ class JIRAClient:
         
         return ""
 
-def load_config(config_path=None):
-    """加载配置文件"""
-    if config_path is None:
-        config_path = os.environ.get("COMMIT_CONFIG_PATH", "./config.json")
+def load_config(config_path=None, username=None, password=None):
+    """加载配置
     
-    try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        print(f"错误: 配置文件不存在: {config_path}")
-        print("请提供包含JIRA用户名和密码的配置文件")
+    配置优先级（从高到低）：
+    1. 命令行参数传入的 username/password
+    2. 环境变量 JIRA_USERNAME / JIRA_PASSWORD
+    3. 配置文件（如果提供了路径）
+    """
+    config = {
+        "jira": {
+            "username": "",
+            "password": ""
+        }
+    }
+    
+    # 1. 如果提供了配置文件路径，尝试加载
+    if config_path:
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                file_config = json.load(f)
+                config.update(file_config)
+        except FileNotFoundError:
+            print(f"警告: 配置文件不存在: {config_path}")
+        except json.JSONDecodeError as e:
+            print(f"警告: 配置文件格式无效: {e}")
+    
+    # 2. 环境变量覆盖配置文件
+    env_username = os.environ.get("JIRA_USERNAME")
+    env_password = os.environ.get("JIRA_PASSWORD")
+    if env_username:
+        config["jira"]["username"] = env_username
+    if env_password:
+        config["jira"]["password"] = env_password
+    
+    # 3. 命令行参数优先级最高
+    if username:
+        config["jira"]["username"] = username
+    if password:
+        config["jira"]["password"] = password
+    
+    # 验证配置
+    if not config["jira"]["username"] or not config["jira"]["password"]:
+        print("错误: 需要提供JIRA用户名和密码")
+        print("提供方式（按优先级排序）：")
+        print("  1. 命令行参数: --username, --password")
+        print("  2. 环境变量: JIRA_USERNAME, JIRA_PASSWORD")
+        print("  3. 配置文件: --config <配置文件路径>")
         sys.exit(1)
-    except json.JSONDecodeError as e:
-        print(f"错误: 配置文件格式无效: {e}")
-        sys.exit(1)
+    
+    return config
 
 def get_jira_info(jira_input, config):
     """获取JIRA信息"""
@@ -289,8 +324,12 @@ def main():
     """主函数"""
     parser = argparse.ArgumentParser(description='从JIRA号提取相关信息')
     parser.add_argument('jira_input', help='JIRA issue URL或issue key (如: SWPL-252395)')
+    parser.add_argument('--username', '-u', default=None,
+                       help='JIRA用户名 (也可通过环境变量 JIRA_USERNAME 设置)')
+    parser.add_argument('--password', '-p', default=None,
+                       help='JIRA密码/API Token (也可通过环境变量 JIRA_PASSWORD 设置)')
     parser.add_argument('--config', '-c', default=None, 
-                       help='配置文件路径 (默认: ./config.json 或环境变量 COMMIT_CONFIG_PATH)')
+                       help='配置文件路径 (JSON格式，包含 {"jira": {"username": "...", "password": "..."}})')
     parser.add_argument('--format', '-f', choices=['text', 'json'], default='text',
                        help='输出格式: text (文本摘要) 或 json (完整JSON数据)')
     parser.add_argument('--output', '-o', default=None,
@@ -298,12 +337,13 @@ def main():
     
     args = parser.parse_args()
     
-    print(f"配置文件: {args.config or '使用默认/环境变量'}")
     print(f"JIRA输入: {args.jira_input}")
     print(f"输出格式: {args.format}")
+    if args.config:
+        print(f"配置文件: {args.config}")
     
-    # 加载配置
-    config = load_config(args.config)
+    # 加载配置（支持多种方式）
+    config = load_config(args.config, args.username, args.password)
     
     # 获取JIRA信息
     jira_info = get_jira_info(args.jira_input, config)
