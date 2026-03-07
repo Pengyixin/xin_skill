@@ -20,9 +20,12 @@ class JiraConfig:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "JiraConfig":
+        # 优先从环境变量获取认证信息
+        username = os.environ.get("JIRA_USERNAME") or data.get("username", "")
+        password = os.environ.get("JIRA_PASSWORD") or data.get("password", "")
         return cls(
-            username=data.get("username", ""),
-            password=data.get("password", ""),
+            username=username,
+            password=password,
             base_url=data.get("base_url", "https://jira.amlogic.com")
         )
 
@@ -36,10 +39,14 @@ class GerritConfig:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "GerritConfig":
+        # 优先从环境变量获取认证信息
+        username = os.environ.get("GERRIT_USERNAME") or data.get("username", "")
+        password = os.environ.get("GERRIT_PASSWORD") or data.get("password", "")
+        base_url = os.environ.get("GERRIT_URL") or data.get("base_url", "https://scgit.amlogic.com")
         return cls(
-            username=data.get("username", ""),
-            password=data.get("password", ""),
-            base_url=data.get("base_url", "https://scgit.amlogic.com")
+            username=username,
+            password=password,
+            base_url=base_url
         )
 
 
