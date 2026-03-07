@@ -52,6 +52,7 @@ class JiraIssue:
     custom_fields: Dict[str, Any]
     comments: List[Dict[str, Any]]
     links: List[Dict[str, Any]]
+    resolution: Optional[str] = None  # 添加 resolution 字段
     
     # 回归相关字段
     needs_regression: bool = False
@@ -198,6 +199,10 @@ class JIRAClient:
         components_data = fields.get("components", [])
         components = [c.get("name", "") for c in components_data if c.get("name")]
         
+        # 提取 resolution
+        resolution_data = fields.get("resolution", {})
+        resolution = resolution_data.get("name") if resolution_data else None
+        
         # 创建JiraIssue对象
         issue = JiraIssue(
             key=issue_data.get("key", ""),
@@ -215,7 +220,8 @@ class JIRAClient:
             components=components,
             custom_fields=fields,  # 保存原始字段以便后续查询自定义字段
             comments=comments,
-            links=links
+            links=links,
+            resolution=resolution
         )
         
         # 检查是否需要回归公版
@@ -234,9 +240,20 @@ class JIRAClient:
         """
         检查issue是否需要回归公版
         
+        优先级：
+        1. 如果 Resolution 是 "Won't Fix"，直接不需要回归
+        2. 否则检查 customfield_11705 字段
+        
         Args:
             issue: JiraIssue对象
         """
+        # 首先检查 Resolution - 如果是 "Won't Fix"，直接不需要回归
+        if issue.resolution and issue.resolution == "Won't Fix":
+            issue.needs_regression = False
+            issue.regression_status = RegressionStatus.NOT_REQUIRED
+            print(f"  ✓ {issue.key} 不需要回归公版 (Resolution=Won't Fix)")
+            return
+        
         # 检查customfield_11705字段
         needs_regression_field = parse_custom_field(issue.custom_fields, "11705")
         print(f'pyx {needs_regression_field}')
