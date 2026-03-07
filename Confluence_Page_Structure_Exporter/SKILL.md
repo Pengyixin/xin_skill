@@ -1,13 +1,15 @@
 ---
 name: confluence-page-structure-exporter
-description: Confluence页面结构导出工具是一个自动化工具，用于获取指定Confluence页面的所有子页面标题，并保留其层级结构。该工具支持递归扫描、多种输出格式（文本、JSON、Markdown），并提供完整的页面元数据和统计信息，便于文档审计、知识库迁移和项目管理。工具使用Confluence官方API保持页面原始顺序，确保导出的结构与Confluence中显示的一致。
+description: Confluence页面结构导出工具是一个自动化工具，用于获取指定Confluence页面的所有子页面标题，并保留其层级结构。用户已通过环境变量配置好Confluence认证信息（CONFLUENCE_URL, CONFLUENCE_USERNAME, CONFLUENCE_PASSWORD），AI助手直接使用即可，无需询问账号密码。该工具支持递归扫描、多种输出格式（文本、JSON、Markdown），并提供完整的页面元数据和统计信息。
 ---
 
 # Confluence页面结构导出工具技能说明
 
 ## 概述
 
-这是一个基于Python的Confluence页面结构导出工具。该技能使AI助手能够获取Confluence页面的完整层级结构，包括所有子页面标题、URL、最后更新时间、版本等信息，并以多种格式输出结果。工具使用Confluence官方API获取子页面，确保页面顺序与Confluence中显示的实际顺序一致。
+这是一个基于Python的Confluence页面结构导出工具。用户已通过环境变量配置好Confluence认证信息，AI助手可以直接使用而无需询问账号密码。该工具能够获取Confluence页面的完整层级结构，包括所有子页面标题、URL、最后更新时间、版本等信息，并以多种格式输出结果。工具使用Confluence官方API获取子页面，确保页面顺序与Confluence中显示的实际顺序一致。
+
+**重要提示**：用户已通过环境变量配置认证信息，AI助手使用时**不需要询问账号密码**，直接执行命令即可。
 
 ## 功能特性
 
@@ -21,7 +23,7 @@ description: Confluence页面结构导出工具是一个自动化工具，用于
 
 ### 技术特性
 - **正确的API使用**: 使用 `GET /rest/api/content/{pageId}/child/page` API获取子页面，确保顺序与Confluence一致
-- **配置驱动**: 通过配置文件管理认证信息，无硬编码凭证
+- **配置驱动**: 支持环境变量和配置文件两种认证方式，无硬编码凭证
 - **错误恢复**: 单个页面获取失败不影响整体导出
 - **进度显示**: 实时显示扫描进度和状态，包括获取的子页面数量
 - **灵活参数**: 支持深度控制、输出格式选择等参数
@@ -38,10 +40,25 @@ description: Confluence页面结构导出工具是一个自动化工具，用于
 pip install requests
 ```
 
-## 配置文件
+## 认证配置
 
-### 1. 配置文件格式
-创建JSON配置文件（例如 `config.json`），包含Confluence认证信息：
+**AI助手注意**：用户已通过环境变量配置好认证信息，无需询问账号密码，直接使用即可。
+
+### 环境变量配置（已配置）
+
+用户已设置以下环境变量：
+
+```bash
+export CONFLUENCE_URL="https://confluence.yourcompany.com"
+export CONFLUENCE_USERNAME="your_username"
+export CONFLUENCE_PASSWORD="your_password"
+# 可选：API Token
+export CONFLUENCE_API_TOKEN="your_api_token"
+```
+
+### 配置文件方式（备选）
+
+如环境变量未设置，可创建JSON配置文件（例如 `config.json`）：
 
 ```json
 {
@@ -53,49 +70,46 @@ pip install requests
 }
 ```
 
-### 2. 安全提示
-- 使用 `config.example.json` 作为模板
-- 不要将包含真实密码的 `config.json` 提交到版本控制系统
-- 确保使用的Confluence账户有读取目标页面及其子页面的权限
-
 ## AI助手使用方法
+
+**AI助手注意**：用户已配置好环境变量，直接使用以下命令即可，**绝对不要询问账号密码**。
 
 ### 基本命令格式
 ```bash
-py confluence_page_structure.py "<URL>" -c <配置文件路径> [-d <深度>] [-f <格式>] [-o <输出路径>]
+py confluence_page_structure.py "<URL>" [-d <深度>] [-f <格式>] [-o <输出路径>]
 ```
 
 ### 必需参数
 - `URL`: 要导出结构的Confluence页面URL
-- `-c, --config`: 配置文件路径（必需）
 
 ### 可选参数
 - `-d, --depth`: 最大递归深度（默认：5）
 - `-f, --format`: 输出格式：`txt`（文本）、`json`、`md`（Markdown）（默认：`txt`）
 - `-o, --output`: 输出文件路径（可选，默认自动生成）
+- `-c, --config`: 配置文件路径（可选，环境变量已配置时不需要）
 
-### 支持的URL格式
-1. **显示格式**: `https://confluence.company.com/display/SPACEKEY/Page+Title`
-2. **页面ID格式**: `https://confluence.company.com/pages/viewpage.action?pageId=12345`
+### 使用流程
+1. 用户会提供Confluence页面URL
+2. **直接使用命令执行**，无需询问任何认证信息
+3. 根据用户需求选择输出格式
 
 ## 使用示例
 
+**AI助手注意**：所有示例均假设环境变量已配置好，直接执行即可。
+
 ### 示例1：基本用法（文本格式）
 ```bash
-# 导出页面结构为文本格式，保持原始顺序
-py confluence_page_structure.py "https://confluence.amlogic.com/display/~yixin.peng/Project+Documentation" -c config.json
+py confluence_page_structure.py "https://confluence.amlogic.com/display/~yixin.peng/Project+Documentation"
 ```
 
 ### 示例2：指定深度和JSON格式
 ```bash
-# 最大深度3，输出为JSON格式
-py confluence_page_structure.py "https://confluence.amlogic.com/pages/viewpage.action?pageId=12345" -c config.json -d 3 -f json
+py confluence_page_structure.py "https://confluence.amlogic.com/pages/viewpage.action?pageId=12345" -d 3 -f json
 ```
 
 ### 示例3：Markdown格式输出
 ```bash
-# 导出为Markdown格式，便于阅读和分享
-py confluence_page_structure.py "https://confluence.amlogic.com/display/TEAM/Weekly+Reports" -c config.json -f md
+py confluence_page_structure.py "https://confluence.amlogic.com/display/TEAM/Weekly+Reports" -f md
 ```
 
 ### 示例4：查看帮助
@@ -186,28 +200,44 @@ Confluence页面结构导出
 
 ## AI助手使用场景
 
+**AI助手注意**：用户已配置环境变量，以下场景直接执行命令即可。
+
 ### 场景1：文档结构审计
 ```bash
-# 审计项目文档结构，发现组织问题
-py confluence_page_structure.py "项目主页URL" -c config.json -f md
+py confluence_page_structure.py "项目主页URL" -f md
+```
+
+### 场景2：知识库迁移准备
+```bash
+py confluence_page_structure.py "知识库根页面URL" -d 10 -f json
+```
+
+### 场景3：定期文档备份
+```bash
+py confluence_page_structure.py "团队空间主页URL" -o 文档结构_$(date +%Y%m%d).txt
+```
+
+### 场景4：权限管理辅助
+```bash
+py confluence_page_structure.py "需要设置权限的页面URL"
 ```
 
 ### 场景2：知识库迁移准备
 ```bash
 # 导出知识库完整结构作为迁移清单
-py confluence_page_structure.py "知识库根页面URL" -c config.json -d 10 -f json
+py confluence_page_structure.py "知识库根页面URL" -d 10 -f json
 ```
 
 ### 场景3：定期文档备份
 ```bash
 # 定期备份团队文档结构
-py confluence_page_structure.py "团队空间主页URL" -c config.json -o 文档结构_$(date +%Y%m%d).txt
+py confluence_page_structure.py "团队空间主页URL" -o 文档结构_$(date +%Y%m%d).txt
 ```
 
 ### 场景4：权限管理辅助
 ```bash
 # 导出页面层级结构，辅助设置权限
-py confluence_page_structure.py "需要设置权限的页面URL" -c config.json
+py confluence_page_structure.py "需要设置权限的页面URL"
 ```
 
 ## 错误处理指南
@@ -216,15 +246,15 @@ py confluence_page_structure.py "需要设置权限的页面URL" -c config.json
 
 #### 1. 配置错误
 ```
-配置错误: 配置文件不存在: config.json
+配置错误: 环境变量未设置且未提供配置文件
 ```
-**解决方案**: 确保配置文件存在且路径正确。
+**AI助手操作**：如遇到此错误，提示用户已配置环境变量，直接重试即可。无需询问账号密码。
 
 #### 2. 认证失败
 ```
 搜索页面失败: HTTP 401
 ```
-**解决方案**: 检查配置文件中的用户名和密码是否正确。
+**解决方案**: 检查环境变量中的用户名和密码是否正确。
 
 #### 3. 页面不存在
 ```
@@ -292,11 +322,12 @@ Confluence_Page_Structure_Exporter/
 
 - **工具位置**: `d:\skill\Confluence_Page_Structure_Exporter\`
 - **主要脚本**: `confluence_page_structure.py`
-- **配置模板**: `config.example.json`
 - **用户文档**: `README.md`
 
+**AI助手注意**：用户使用此工具时，认证信息已通过环境变量配置好，直接执行命令即可，**绝对不要询问账号密码**。
+
 如有问题，请检查：
-1. 配置文件是否正确
+1. 环境变量是否正确设置（CONFLUENCE_URL, CONFLUENCE_USERNAME, CONFLUENCE_PASSWORD）
 2. 网络连接是否正常
 3. Confluence账户权限是否足够
 4. 目标页面是否存在且可访问

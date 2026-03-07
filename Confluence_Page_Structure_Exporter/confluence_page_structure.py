@@ -17,30 +17,44 @@ from urllib.parse import urljoin, urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class ConfluencePageStructureExporter:
-    def __init__(self, config_path):
+    def __init__(self, config_path=None):
         """
         初始化Confluence页面结构导出器
-        :param config_path: 配置文件路径（必须提供）
+        :param config_path: 配置文件路径（可选，如提供则优先使用配置文件）
         """
-        if not config_path:
-            raise ValueError("必须提供配置文件路径，使用 -c 参数指定配置文件")
+        # 首先尝试从环境变量读取配置
+        self.username = os.environ.get('CONFLUENCE_USERNAME')
+        self.password = os.environ.get('CONFLUENCE_PASSWORD')
+        self.base_url = os.environ.get('CONFLUENCE_URL')
+        self.api_token = os.environ.get('CONFLUENCE_API_TOKEN')
         
-        if not os.path.exists(config_path):
-            raise FileNotFoundError(f"配置文件不存在: {config_path}")
+        # 如果环境变量未设置，则尝试从配置文件读取
+        if not all([self.username, self.password, self.base_url]):
+            if not config_path:
+                raise ValueError("环境变量未设置且未提供配置文件。请设置环境变量(CONFLUENCE_URL, CONFLUENCE_USERNAME, CONFLUENCE_PASSWORD)或使用 -c 参数指定配置文件")
+            
+            if not os.path.exists(config_path):
+                raise FileNotFoundError(f"配置文件不存在: {config_path}")
+            
+            # 加载配置文件
+            self.config = self.load_config(config_path)
+            
+            # 验证必需的配置项
+            required_keys = ['username', 'password', 'base_url']
+            for key in required_keys:
+                if key not in self.config.get('confluence', {}):
+                    raise ValueError(f"配置文件中缺少必需的配置项: confluence.{key}")
+            
+            # Confluence配置
+            self.username = self.config['confluence']['username']
+            self.password = self.config['confluence']['password']
+            self.base_url = self.config['confluence']['base_url']
+        else:
+            print("使用环境变量配置")
         
-        # 加载配置文件
-        self.config = self.load_config(config_path)
-        
-        # 验证必需的配置项
-        required_keys = ['username', 'password', 'base_url']
-        for key in required_keys:
-            if key not in self.config.get('confluence', {}):
-                raise ValueError(f"配置文件中缺少必需的配置项: confluence.{key}")
-        
-        # Confluence配置
-        self.username = self.config['confluence']['username']
-        self.password = self.config['confluence']['password']
-        self.base_url = self.config['confluence']['base_url']
+        # 确保配置值存在
+        if not self.username or not self.password or not self.base_url:
+            raise ValueError("配置错误：缺少必需的配置项（username, password, base_url）")
         
         # 创建会话
         self.session = requests.Session()
@@ -546,7 +560,7 @@ class ConfluencePageStructureExporter:
 def main():
     parser = argparse.ArgumentParser(description='导出Confluence页面结构（包括所有子页面）')
     parser.add_argument('url', help='Confluence页面URL')
-    parser.add_argument('-c', '--config', required=True, help='配置文件路径（必需）')
+    parser.add_argument('-c', '--config', help='配置文件路径（可选，优先使用环境变量）')
     parser.add_argument('-d', '--depth', type=int, default=2, help='最大递归深度（默认：2）')
     parser.add_argument('-f', '--format', choices=['txt', 'json', 'md'], default='txt', 
                        help='输出格式：txt（文本）、json、md（Markdown）（默认：txt）')
@@ -559,8 +573,13 @@ def main():
         exporter = ConfluencePageStructureExporter(args.config)
     except (ValueError, FileNotFoundError) as e:
         print(f"配置错误: {e}")
-        print(f"请确保配置文件存在并包含正确的confluence配置")
-        print(f"配置文件格式示例:")
+        print(f"\n配置方式一（环境变量 - 推荐）：")
+        print(f"  export CONFLUENCE_URL=\"https://confluence.yourcompany.com\"")
+        print(f"  export CONFLUENCE_USERNAME=\"your_username\"")
+        print(f"  export CONFLUENCE_PASSWORD=\"your_password\"")
+        print(f"\n配置方式二（配置文件）：")
+        print(f"  使用 -c 参数指定配置文件路径")
+        print(f"  配置文件格式示例:")
         print(json.dumps({
             "confluence": {
                 "username": "your_username",
