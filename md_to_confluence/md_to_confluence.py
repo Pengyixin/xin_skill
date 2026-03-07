@@ -408,15 +408,15 @@ def main():
     
     args = parser.parse_args()
     
-    # 读取配置文件（优先级：命令行参数 > 环境变量 > 配置文件）
+    # 读取配置文件（优先级：环境变量 > 命令行参数 > 配置文件）
     config = load_config(args.config)
     confluence_config = config.get('confluence', {})
-    
-    # 获取配置值，优先级：命令行 > 环境变量 > 配置文件
-    confluence_url = args.confluence_url or confluence_config.get('base_url') or confluence_config.get('url')
-    username = args.username or confluence_config.get('username')
-    password = args.password or confluence_config.get('password') or confluence_config.get('api_token')
-    is_cloud = args.cloud or confluence_config.get('cloud', False)
+
+    # 获取配置值，优先级：环境变量 > 命令行 > 配置文件
+    confluence_url = os.getenv('CONFLUENCE_URL') or args.confluence_url or confluence_config.get('base_url') or confluence_config.get('url')
+    username = os.getenv('CONFLUENCE_USERNAME') or args.username or confluence_config.get('username')
+    password = os.getenv('CONFLUENCE_PASSWORD') or args.password or confluence_config.get('password') or confluence_config.get('api_token')
+    is_cloud = os.getenv('CONFLUENCE_CLOUD', '').lower() == 'true' or args.cloud or confluence_config.get('cloud', False)
     
     # 读取 Markdown 文件
     if not os.path.exists(args.markdown_file):
@@ -442,15 +442,15 @@ def main():
     
     # 检查必要的配置
     if not confluence_url:
-        print("Error: Confluence URL 未设置。请使用 --confluence-url 参数、设置 CONFLUENCE_URL 环境变量，或在 config.json 中配置")
+        print("Error: Confluence URL 未设置。请设置 CONFLUENCE_URL 环境变量、使用 --confluence-url 参数，或在 config.json 中配置")
         sys.exit(1)
     
     if not username:
-        print("Error: 用户名未设置。请使用 --username 参数、设置 CONFLUENCE_USERNAME 环境变量，或在 config.json 中配置")
+        print("Error: 用户名未设置。请设置 CONFLUENCE_USERNAME 环境变量、使用 --username 参数，或在 config.json 中配置")
         sys.exit(1)
     
     if not password:
-        print("Error: 密码未设置。请使用 --password 参数、设置 CONFLUENCE_PASSWORD 环境变量，或在 config.json 中配置")
+        print("Error: 密码未设置。请设置 CONFLUENCE_PASSWORD 环境变量、使用 --password 参数，或在 config.json 中配置")
         sys.exit(1)
     
     # 初始化上传器

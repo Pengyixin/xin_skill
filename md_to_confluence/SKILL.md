@@ -35,7 +35,11 @@ python3 setup.py
 
 ## 配置方式
 
-### 方式 1: config.json（推荐）
+配置优先级（从高到低）：**系统环境变量 > 命令行参数 > config.json**
+
+系统环境变量具有最高优先级，会覆盖命令行参数和配置文件中的同名设置。
+
+### 方式 1: config.json
 
 编辑 `config.json`：
 
@@ -49,7 +53,7 @@ python3 setup.py
 }
 ```
 
-### 方式 2: 环境变量
+### 方式 2: 系统环境变量（最高优先级）
 
 ```bash
 export CONFLUENCE_URL=https://confluence.company.com
@@ -66,8 +70,6 @@ export CONFLUENCE_SPACE_KEY=YOURSPACE
 --username your-email@company.com \
 --password your-api-token
 ```
-
-**配置优先级**: 命令行 > 环境变量 > config.json
 
 ## 使用方法
 
