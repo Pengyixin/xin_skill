@@ -7,6 +7,7 @@ Gerrit Cherry-Pick Tool
 """
 
 import json
+import os
 import re
 import sys
 import urllib.request
@@ -16,10 +17,56 @@ from datetime import datetime
 import base64
 
 
-def load_config(config_path: str = "config.json") -> Dict:
-    """加载配置文件"""
-    with open(config_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
+def load_config(config_path: Optional[str] = None) -> Dict:
+    """
+    加载配置，优先级：环境变量 > 配置文件
+    
+    支持的环境变量：
+    - GERRIT_URL / GERRIT_BASE_URL: Gerrit服务器地址
+    - GERRIT_USERNAME: 用户名
+    - GERRIT_PASSWORD: 密码/Token
+    
+    配置文件路径（可选，按优先级查找）：
+    1. 传入的 config_path 参数
+    2. ~/.gerrit/config.json（全局配置）
+    3. ./config.json（本地配置）
+    """
+    config = {}
+    
+    # 确定配置文件路径
+    config_paths = []
+    if config_path:
+        config_paths.append(config_path)
+    config_paths.extend([
+        os.path.expanduser('~/.gerrit/config.json'),
+        'config.json'
+    ])
+    
+    # 尝试加载第一个存在的配置文件
+    for path in config_paths:
+        if os.path.exists(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                break
+            except (json.JSONDecodeError, IOError):
+                continue
+    
+    # 配置文件值作为默认值
+    gerrit_config = config.get('gerrit', {})
+    
+    # 环境变量优先级最高，覆盖配置文件
+    base_url = os.getenv('GERRIT_URL') or os.getenv('GERRIT_BASE_URL') or gerrit_config.get('base_url') or gerrit_config.get('url')
+    username = os.getenv('GERRIT_USERNAME') or gerrit_config.get('username')
+    password = os.getenv('GERRIT_PASSWORD') or gerrit_config.get('password')
+    
+    return {
+        'gerrit': {
+            'base_url': base_url,
+            'username': username,
+            'password': password
+        }
+    }
 
 
 def parse_change_identifier(identifier: str) -> Tuple[str, str]:
@@ -661,8 +708,21 @@ def main():
     3. Commit Hash:     3eb601ad7b1c8865678ae214c13718f7da3e585e 或 3eb601ad7
     4. Commit Message:  (自动提取其中的Change-Id)
 
+配置方式（优先级：环境变量 > 配置文件）:
+    方式1 - 环境变量（推荐）:
+        export GERRIT_URL="https://scgit.amlogic.com"
+        export GERRIT_USERNAME="your_username"
+        export GERRIT_PASSWORD="your_password"
+    
+    方式2 - 配置文件（config.json）:
+        1. ~/.gerrit/config.json（全局配置）
+        2. ./config.json（本地配置）
+    
+    方式3 - 自定义配置文件路径:
+        python gerrit_cherry_pick.py "610496" "main" "/path/to/config.json"
+
 示例:
-    # 使用Gerrit URL
+    # 使用环境变量（已设置）
     python gerrit_cherry_pick.py "https://scgit.amlogic.com/#/c/610496/" "main"
     
     # 使用Change-Id
@@ -677,7 +737,7 @@ def main():
 参数:
     identifiers     - 变更标识符，支持URL/Change-Id/Commit Hash
     target_branch   - 目标分支名称
-    config_file     - 配置文件路径 (可选, 默认: config.json)
+    config_file     - 配置文件路径 (可选, 默认使用环境变量或标准配置文件)
         """)
         sys.exit(1)
 
@@ -685,7 +745,7 @@ def main():
     identifiers_input = sys.argv[1]
     identifiers = [id.strip() for id in identifiers_input.replace(',', ' ').split() if id.strip()]
     target_branch = sys.argv[2]
-    config_file = sys.argv[3] if len(sys.argv) > 3 else "config.json"
+    config_file = sys.argv[3] if len(sys.argv) > 3 else None
 
     print("=" * 60)
     print("Gerrit Cherry-Pick 工具")
@@ -694,16 +754,34 @@ def main():
     print(f"待处理变更数: {len(identifiers)}")
 
     # 加载配置
-    print(f"\n加载配置文件: {config_file}")
+    print(f"\n加载配置...")
     try:
-        config = load_config(config_file)
+        config = load_config(config_file if config_file else None)
     except Exception as e:
-        print(f"错误: 无法加载配置文件 - {e}")
+        print(f"错误: 无法加载配置 - {e}")
         sys.exit(1)
 
-    base_url = config['gerrit']['base_url'].rstrip('/')
-    username = config['gerrit']['username']
-    password = config['gerrit']['password']
+    gerrit_config = config['gerrit']
+    base_url = gerrit_config['base_url']
+    username = gerrit_config['username']
+    password = gerrit_config['password']
+    
+    # 验证配置
+    if not base_url:
+        print("❌ 错误: GERRIT_URL 或 GERRIT_BASE_URL 环境变量未设置")
+        print("   请在环境变量中设置：")
+        print("   export GERRIT_URL='https://your-gerrit.com'")
+        print("   export GERRIT_USERNAME='your-username'")
+        print("   export GERRIT_PASSWORD='your-password'")
+        sys.exit(1)
+    if not username:
+        print("❌ 错误: GERRIT_USERNAME 环境变量未设置")
+        sys.exit(1)
+    if not password:
+        print("❌ 错误: GERRIT_PASSWORD 环境变量未设置")
+        sys.exit(1)
+    
+    base_url = base_url.rstrip('/')
 
     # 存储所有结果
     all_results = []

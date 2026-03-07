@@ -31,8 +31,35 @@
 pip install pygerrit2 requests
 ```
 
-### 2.2 配置文件设置
-创建或修改 `config.json` 文件：
+### 2.2 配置方式
+
+工具支持两种配置方式，优先级：**环境变量 > 配置文件**
+
+#### 方式一：环境变量（推荐）
+
+设置以下环境变量：
+```bash
+export GERRIT_URL="https://scgit.amlogic.com"
+export GERRIT_USERNAME="your_username"
+export GERRIT_PASSWORD="your_password"
+```
+
+**优点**：
+- 无需管理配置文件
+- 支持临时切换账号：`GERRIT_USERNAME="other" python3 gerrit_comment.py ...`
+- 敏感信息不会留在代码仓库中
+
+**持久化配置**（添加到 ~/.bashrc 或 ~/.zshrc）：
+```bash
+echo 'export GERRIT_URL="https://scgit.amlogic.com"' >> ~/.bashrc
+echo 'export GERRIT_USERNAME="your_username"' >> ~/.bashrc
+echo 'export GERRIT_PASSWORD="your_password"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+#### 方式二：配置文件
+
+创建 `config.json` 文件：
 ```json
 {
   "gerrit": {
@@ -42,6 +69,12 @@ pip install pygerrit2 requests
   }
 }
 ```
+
+**配置文件查找顺序**：
+1. `~/.gerrit/config.json`（全局配置）
+2. `./config.json`（本地配置）
+
+**混合使用**：环境变量会覆盖配置文件中的同名配置
 
 ### 2.3 基本用法
 ```bash
@@ -101,18 +134,17 @@ python3 gerrit_comment.py "https://scgit.amlogic.com/#/c/644513/" "test commit"
 ### 示例 2: 使用 Python API
 
 ```python
-from gerrit_comment import GerritCommenter
-import json
+from gerrit_comment import GerritCommenter, load_config
 
-# 加载配置
-with open('config.json', 'r') as f:
-    config = json.load(f)['gerrit']
+# 加载配置（环境变量优先）
+config = load_config()
+gerrit_config = config['gerrit']
 
 # 创建 commenter
 commenter = GerritCommenter(
-    base_url=config['base_url'],
-    username=config['username'],
-    password=config['password']
+    base_url=gerrit_config['base_url'],
+    username=gerrit_config['username'],
+    password=gerrit_config['password']
 )
 
 # 添加评论
@@ -126,10 +158,41 @@ print(f"评论添加成功: {result}")
 
 | 问题 | 可能原因 | 解决方案 |
 |------|----------|----------|
+| GERRIT_URL 环境变量未设置 | 未配置环境变量且缺少配置文件 | 设置环境变量或创建 config.json |
+| GERRIT_USERNAME 环境变量未设置 | 同上 | 同上 |
+| GERRIT_PASSWORD 环境变量未设置 | 同上 | 同上 |
 | 配置文件不存在 | 未创建 config.json | 创建配置文件并填入认证信息 |
-| 401 Unauthorized | 用户名或密码错误 | 检查 config.json 中的凭据 |
+| 401 Unauthorized | 用户名或密码错误 | 检查环境变量或 config.json 中的凭据 |
 | 404 Not Found | Change ID 不存在 | 确认 change ID 正确且可访问 |
 | ImportError | 缺少依赖包 | 运行 `pip install pygerrit2 requests` |
+
+### 5.2 配置问题排查
+
+**检查环境变量是否设置**：
+```bash
+echo $GERRIT_URL
+echo $GERRIT_USERNAME
+echo $GERRIT_PASSWORD
+```
+
+**验证配置文件路径**：
+```bash
+# 检查全局配置
+ls -la ~/.gerrit/config.json
+
+# 检查本地配置
+ls -la ./config.json
+```
+
+**测试配置是否正确**：
+```bash
+# 使用环境变量
+GERRIT_URL="..." GERRIT_USERNAME="..." GERRIT_PASSWORD="..." python3 gerrit_comment.py "644513" "test"
+
+# 使用配置文件
+unset GERRIT_URL GERRIT_USERNAME GERRIT_PASSWORD
+python3 gerrit_comment.py "644513" "test"
+```
 
 ### 5.2 权限问题
 
@@ -177,6 +240,38 @@ print(f"评论添加成功: {result}")
 ```
 
 ## 8. API 参考
+
+### load_config() 函数
+
+加载配置，优先级：**环境变量 > 配置文件**
+
+**支持的环境变量**：
+- `GERRIT_URL` / `GERRIT_BASE_URL`: Gerrit 服务器地址
+- `GERRIT_USERNAME`: 用户名
+- `GERRIT_PASSWORD`: 密码/Token
+
+**配置文件路径**（按优先级查找）：
+1. `~/.gerrit/config.json`（全局配置）
+2. `./config.json`（本地配置）
+
+**返回值**：
+```python
+{
+    'gerrit': {
+        'base_url': '...',
+        'username': '...',
+        'password': '...'
+    }
+}
+```
+
+**使用示例**：
+```python
+from gerrit_comment import load_config
+
+config = load_config()
+print(config['gerrit']['base_url'])
+```
 
 ### GerritCommenter 类
 

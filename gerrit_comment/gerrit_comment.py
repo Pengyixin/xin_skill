@@ -6,10 +6,59 @@ Gerrit Comment 评论工具
 """
 
 import json
+import os
 import re
 import sys
 from requests.auth import HTTPDigestAuth
 from pygerrit2.rest import GerritRestAPI
+
+
+def load_config():
+    """
+    加载配置，优先级：环境变量 > 配置文件
+    
+    支持的环境变量：
+    - GERRIT_URL / GERRIT_BASE_URL: Gerrit服务器地址
+    - GERRIT_USERNAME: 用户名  
+    - GERRIT_PASSWORD: 密码/Token
+    
+    配置文件路径（可选，按优先级查找）：
+    1. ~/.gerrit/config.json（全局配置）
+    2. ./config.json（本地配置）
+    """
+    config = {}
+    
+    # 配置文件路径（按优先级）
+    config_paths = [
+        os.path.expanduser('~/.gerrit/config.json'),
+        'config.json'
+    ]
+    
+    # 尝试加载第一个存在的配置文件
+    for path in config_paths:
+        if os.path.exists(path):
+            try:
+                with open(path, 'r') as f:
+                    config = json.load(f)
+                break
+            except (json.JSONDecodeError, IOError):
+                continue
+    
+    # 配置文件值作为默认值
+    gerrit_config = config.get('gerrit', {})
+    
+    # 环境变量优先级最高，覆盖配置文件
+    base_url = os.getenv('GERRIT_URL') or os.getenv('GERRIT_BASE_URL') or gerrit_config.get('base_url') or gerrit_config.get('url')
+    username = os.getenv('GERRIT_USERNAME') or gerrit_config.get('username')
+    password = os.getenv('GERRIT_PASSWORD') or gerrit_config.get('password')
+    
+    return {
+        'gerrit': {
+            'base_url': base_url,
+            'username': username,
+            'password': password
+        }
+    }
 
 
 class GerritCommenter:
@@ -164,22 +213,28 @@ class GerritCommenter:
 
 def main():
     """主函数 - 命令行入口"""
-    # 读取配置
-    try:
-        with open('config.json', 'r') as f:
-            config = json.load(f)
-    except FileNotFoundError:
-        print("❌ 错误: 找不到 config.json 配置文件")
-        print("   请确保配置文件存在于当前目录")
-        sys.exit(1)
-    except json.JSONDecodeError as e:
-        print(f"❌ 错误: config.json 格式错误: {e}")
-        sys.exit(1)
+    # 读取配置（环境变量优先）
+    config = load_config()
     
     gerrit_config = config['gerrit']
     base_url = gerrit_config['base_url']
     username = gerrit_config['username']
     password = gerrit_config['password']
+    
+    # 验证配置
+    if not base_url:
+        print("❌ 错误: GERRIT_URL 或 GERRIT_BASE_URL 环境变量未设置")
+        print("   请在环境变量中设置：")
+        print("   export GERRIT_URL='https://your-gerrit.com'")
+        print("   export GERRIT_USERNAME='your-username'")
+        print("   export GERRIT_PASSWORD='your-password'")
+        sys.exit(1)
+    if not username:
+        print("❌ 错误: GERRIT_USERNAME 环境变量未设置")
+        sys.exit(1)
+    if not password:
+        print("❌ 错误: GERRIT_PASSWORD 环境变量未设置")
+        sys.exit(1)
     
     # 解析命令行参数
     if len(sys.argv) < 3:
