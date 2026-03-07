@@ -1,4 +1,7 @@
-# Skill: gerrit-comment
+---
+name: gerrit-comment
+description: Gerrit Comment 评论工具是一个用于在 Gerrit 代码审查系统上添加评论的 Python 工具。支持通过 Gerrit URL 或 change ID 在指定的 change 上添加普通评论，支持环境变量和配置文件管理认证信息，适用于代码审查反馈和自动化评论场景。
+---
 
 # Gerrit Comment 评论工具使用说明
 
@@ -194,7 +197,7 @@ unset GERRIT_URL GERRIT_USERNAME GERRIT_PASSWORD
 python3 gerrit_comment.py "644513" "test"
 ```
 
-### 5.2 权限问题
+### 5.3 权限问题
 
 如果遇到权限错误：
 1. 确认账号有评论该 change 的权限
