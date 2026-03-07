@@ -62,10 +62,13 @@ def load_config():
 
 def extract_change_id(url):
     """从 Gerrit URL 中提取 change-id"""
+    # 首先检查是否是纯数字
+    if re.match(r"^\d+$", url):
+        return url
+    
     patterns = [
         r"/c/(\d+)",
         r"scgit\.amlogic\.com/(\d+)",
-        r"^\d+$",
     ]
     
     for pattern in patterns:
