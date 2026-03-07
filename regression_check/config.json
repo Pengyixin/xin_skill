@@ -1,19 +1,53 @@
 {
   "jira": {
     "username": "yixin.peng",
-    "password": "111"
+    "password": "xxx"
   },
   "gerrit": {
     "base_url": "https://scgit.amlogic.com",
     "username": "yixin.peng",
-    "password": "111"
+    "password": "xxx"
   },
-  "email": {
-    "smtp_host": "smtp.amlogic.com",
-    "smtp_port": 25,
-    "username": "",
-    "password": "",
-    "from": "yixin.peng@amlogic.com",
-    "to": ["yinan.zhang@amlogic.com"]
-  }
+  "regression_branches": [
+    {
+      "project": "platform/hardware/amlogic/media_modules",
+      "branch": "amlogic-main-dev",
+      "description": "Media Modules 主开发分支"
+    },
+    {
+      "project": "kernel/common_drivers",
+      "branch": "amlogic-5.15-dev",
+      "description": "kenrel common 主开发分支"
+    },
+    {
+      "project": "amlogic/docs/sdk",
+      "branch": "projects/dev",
+      "description": "对外文档 主开发分支"
+    },
+    {
+      "project": "linux/multimedia",
+      "branch": "master",
+      "description": "bin 主开发分支"
+    },
+    {
+      "project": "amlogic/tools/MediaTest",
+      "branch": "media-debug-python",
+      "description": "media debug 主开发分支"
+    },
+    {
+      "project": "av-restricted/platform/vendor/media_hal",
+      "branch": "Linux",
+      "description": "media hal linux 主开发分支"
+    },
+    {
+      "project": "platform/external/ffmpeg-aml",
+      "branch": "s-amlogic",
+      "description": "ffmpeg 主开发分支"
+    },
+    {
+      "project": "platform/external/ffmpeg-aml",
+      "branch": "openlinux/tv/u-amlogic",
+      "description": "ffmpeg openlinux 主开发分支"
+    }
+  ]
 }
